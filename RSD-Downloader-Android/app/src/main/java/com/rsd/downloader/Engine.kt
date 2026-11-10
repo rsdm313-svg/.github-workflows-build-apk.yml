@@ -67,7 +67,7 @@ object Engine {
         emit(JSONObject().put("type", "log").put("text", text))
     }
 
-    private fun setBusy(b: Boolean) {
+    private fun updateBusy(b: Boolean) {
         busy = b
         emit(JSONObject().put("type", "state").put("busy", b))
     }
@@ -205,7 +205,7 @@ object Engine {
         lastDone = null
         lastPct = 0
         lastEta = ""
-        setBusy(true)
+        updateBusy(true)
         status("info", "Preparing…")
 
         val workDir = File(ctx.cacheDir, "dl/" + System.currentTimeMillis())
@@ -246,7 +246,7 @@ object Engine {
             }
         } finally {
             try { workDir.deleteRecursively() } catch (e: Throwable) { }
-            setBusy(false)
+            updateBusy(false)
         }
     }
 
