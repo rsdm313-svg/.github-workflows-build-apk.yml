@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>RSD Downloader</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #1a1a1a;
+      --s1:      #222222;
+      --s2:      #2a2a2a;
+      --s3:      #333333;
+      --line:    #2e2e2e;
+      --acc:     #BAFC04;
+      --acc-d:   #9dd300;
+      --text:    #d8d8d8;
+      --muted:   #6a6a6a;
+      --ok:      #4ade80;
+      --err:     #f87171;
+      --r:       4px;
+      --font:    -apple-system, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: 40px 14px 12px;
+      gap: 12px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, #log { -webkit-user-select: text; user-select: text; }
+    .drag-strip { position: fixed; top: 0; left: 0; right: 0; height: 30px; -webkit-app-region: drag; z-index: 5; }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .header-left { display: flex; align-items: center; gap: 8px; }
+    .header-pip {
+      width: 7px; height: 7px;
+      background: var(--acc);
+      border-radius: 50%;
+    }
+    .header-title {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--text);
+    }
+    .header-tag {
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    /* Field group */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .label {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Inputs */
+    input[type="text"], select {
+      width: 100%;
+      background: var(--s1);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 11px;
+      padding: 7px 9px;
+      outline: none;
+      transition: border-color 0.12s;
+      appearance: none;
+    }
+    input[type="text"]:focus,
+    select:focus { border-color: var(--acc); }
+    input::placeholder { color: var(--muted); }
+
+    select {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236a6a6a'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 9px center;
+      padding-right: 24px;
+    }
+    select option { background: #222; }
+
+    /* Save-to row */
+    .folder-row { display: flex; gap: 6px; }
+    .folder-row input { flex: 1; }
+    .browse {
+      background: var(--s1);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      color: var(--muted);
+      font-size: 14px;
+      width: 30px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 0.12s, color 0.12s;
+    }
+    .browse:hover { border-color: var(--acc); color: var(--acc); }
+
+    /* Clipboard actions */
+    .url-row { display: flex; gap: 6px; }
+    .url-row input { flex: 1; min-width: 0; }
+    .duration-info { font-size: 9px; color: var(--muted); margin-top: -2px; min-height: 11px; }
+    .time-mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .time-mode {
+      height: 30px;
+      background: var(--s1);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .time-mode.active { border-color: var(--acc); color: var(--acc); }
+    .time-fields { display: none; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .time-fields.visible { display: grid; }
+    .time-field { display: flex; flex-direction: column; gap: 5px; }
+    .time-field input { width: 100%; }
+    .time-hint { grid-column: 1 / -1; font-size: 9px; color: var(--muted); }
+    .paste {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--s1);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      color: var(--acc);
+      cursor: pointer;
+      transition: border-color 0.12s, color 0.12s;
+    }
+    .paste:hover { border-color: var(--acc); color: var(--acc); }
+    .paste svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+
+    .field-hint { font-size: 9px; color: var(--muted); line-height: 1.35; }
+
+    /* Auto-paste + components */
+    .auto-paste { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--muted); cursor: pointer; margin-top: -4px; }
+    .auto-paste input { accent-color: var(--acc); width: 11px; height: 11px; margin: 0; cursor: pointer; }
+    .components {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 9px; color: var(--muted); letter-spacing: 0.03em; flex-shrink: 0;
+    }
+    #comp-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #comp-status .ok { color: var(--ok); }
+    #comp-status .bad { color: var(--err); }
+    #update-btn { cursor: pointer; flex-shrink: 0; letter-spacing: 0.06em; }
+    #update-btn:hover { color: var(--acc); }
+    #update-btn.disabled { pointer-events: none; opacity: 0.4; }
+
+    /* (desktop leftover) */
+    #reveal-btn {
+      width: 100%; height: 28px; background: transparent; border: 1px solid var(--s3);
+      border-radius: var(--r); color: var(--text); font-family: var(--font); font-size: 11px;
+      cursor: pointer; display: none; flex-shrink: 0; transition: border-color 0.12s, color 0.12s;
+    }
+    #reveal-btn:hover { border-color: var(--acc); color: var(--acc); }
+
+    /* Drag-and-drop highlight */
+    body.drop-over #url-input { border-color: var(--acc); }
+
+    /* Divider */
+    hr { border: none; border-top: 1px solid var(--line); }
+
+    /* Download button */
+    #download-btn {
+      width: 100%;
+      height: 36px;
+      background: var(--acc);
+      color: #0e0e0e;
+      border: none;
+      border-radius: var(--r);
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+      flex-shrink: 0;
+    }
+    #download-btn:hover:not(:disabled) { background: var(--acc-d); }
+    #download-btn:active:not(:disabled) { transform: scale(0.99); }
+    #download-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+    /* Cancel */
+    #cancel-btn {
+      width: 100%;
+      height: 28px;
+      background: transparent;
+      border: 1px solid var(--s3);
+      border-radius: var(--r);
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+      transition: border-color 0.12s, color 0.12s;
+    }
+    #cancel-btn:hover { border-color: var(--err); color: var(--err); }
+
+    /* Progress */
+    #progress-wrap { display: none; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .progress-row { display: flex; justify-content: space-between; align-items: center; }
+    #pct { font-size: 10px; color: var(--acc); font-weight: 500; }
+    #eta { font-size: 10px; color: var(--muted); }
+    .track {
+      height: 2px;
+      background: var(--s2);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    #bar {
+      height: 100%;
+      width: 0%;
+      background: var(--acc);
+      border-radius: 1px;
+      transition: width 0.3s ease;
+    }
+
+    /* Status */
+    .status-row { display: flex; align-items: center; gap: 7px; }
+    .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--s3);
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .dot.info { background: var(--acc); animation: pulse 1.4s infinite; }
+    .dot.ok   { background: var(--ok); }
+    .dot.err  { background: var(--err); }
+    .dot.warn { background: #fbbf24; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.25} }
+    #status {
+      font-size: 10px;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+    #status.info { color: var(--acc); }
+    #status.ok   { color: var(--ok); }
+    #status.err  { color: var(--err); }
+    #status.warn { color: #fbbf24; }
+
+    .footer-credit { position: sticky; bottom: 0; z-index: 2; flex: 0 0 auto; padding-top: 2px; color: var(--muted); font-size: 8px; line-height: 1; letter-spacing: 0.04em; text-align: center; }
+
+    /* Log */
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .log-clear {
+      font-size: 9px;
+      color: var(--muted);
+      cursor: pointer;
+      letter-spacing: 0.06em;
+    }
+    .log-clear:hover { color: var(--text); }
+    #log {
+      flex: 1;
+      min-height: 0;
+      background: var(--s1);
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      padding: 8px 10px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 9.5px;
+      color: var(--muted);
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.65;
+    }
+    #log::-webkit-scrollbar { width: 3px; }
+    #log::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+    #log .g { color: var(--ok); }
+    #log .a { color: var(--acc); }
+    #log .e { color: var(--err); }
+
+    /* ---------- Android layout ---------- */
+    html, body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; -webkit-tap-highlight-color: transparent; }
+    body { padding: 16px 14px calc(18px + env(safe-area-inset-bottom)); -webkit-user-select: none; user-select: none; }
+    input, #log { -webkit-user-select: text; user-select: text; }
+    .header-title { font-size: 14px; }
+    .header-tag { font-size: 8px; }
+    .label { font-size: 10px; }
+    input[type="text"], select { font-size: 15px; padding: 12px 11px; }
+    .paste { width: 48px; height: 48px; }
+    .paste svg { width: 24px; height: 24px; }
+    .time-mode { height: 44px; font-size: 12px; }
+    .duration-info, .auto-paste, .time-hint, .components { font-size: 11px; }
+    .auto-paste input { width: 16px; height: 16px; }
+    .saveto { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 11px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    #download-btn { height: 52px; font-size: 14px; }
+    #cancel-btn { height: 44px; font-size: 13px; }
+    #done-actions { display: none; gap: 8px; flex-shrink: 0; }
+    #done-actions button { flex: 1; height: 44px; background: transparent; border: 1px solid var(--s3); border-radius: var(--r); color: var(--text); font-family: var(--font); font-size: 13px; }
+    #done-actions button:active { border-color: var(--acc); color: var(--acc); }
+    #status, #pct, #eta { font-size: 12px; }
+    #log { flex: none; height: 170px; font-size: 10.5px; }
+    .footer-credit { font-size: 10px; padding-top: 6px; }
+  </style>
+</head>
+<body>
+
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-pip"></div>
+      <span class="header-title">RSD Downloader</span>
+    </div>
+    <span class="header-tag">DOWNLOAD · CONVERT · SAVE</span>
+  </div>
+
+  <!-- URL -->
+  <div class="field">
+    <span class="label">URL</span>
+    <div class="url-row">
+      <input type="text" id="url-input" inputmode="url" enterkeyhint="go" autocapitalize="off" placeholder="Paste YouTube / Facebook / Pinterest / Instagram / X link…" autocomplete="off" spellcheck="false"/>
+      <button type="button" class="paste" id="paste-link-btn" title="Paste link from clipboard" aria-label="Paste link from clipboard">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5H5.5A1.5 1.5 0 0 0 4 6v9.5A1.5 1.5 0 0 0 5.5 17h7A1.5 1.5 0 0 0 14 15.5V14"/><path d="M8 3.5A1.5 1.5 0 0 1 9.5 2h2A1.5 1.5 0 0 1 13 3.5v1A1.5 1.5 0 0 1 11.5 6h-2A1.5 1.5 0 0 1 8 4.5z"/><path d="M11 11h6m-3-3 3 3-3 3"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="duration-info" id="duration-info" aria-live="polite">Total duration: paste a video link</div>
+  <label class="auto-paste" for="auto-paste"><input type="checkbox" id="auto-paste" checked/> Auto-paste copied links when I open the app</label>
+
+  <!-- Download range settings; Full video is the default. -->
+  <div class="field">
+    <span class="label">Download settings</span>
+    <div class="time-mode-row" role="group" aria-label="Download settings">
+      <button type="button" class="time-mode active" id="full-video-btn" data-download-mode="full" aria-pressed="true">Full video</button>
+      <button type="button" class="time-mode" id="selected-area-btn" data-download-mode="selected" aria-pressed="false">Selected Area</button>
+    </div>
+  </div>
+
+  <div class="time-fields" id="time-fields" aria-hidden="true">
+    <label class="time-field" for="start-time">
+      <span class="label">Start time</span>
+      <input type="text" id="start-time" value="00:00:00" placeholder="00:00:00" autocomplete="off" spellcheck="false"/>
+    </label>
+    <label class="time-field" for="end-time">
+      <span class="label">End time</span>
+      <input type="text" id="end-time" placeholder="00:00:00" autocomplete="off" spellcheck="false"/>
+    </label>
+    <span class="time-hint">Enter time as HH:MM:SS or MM:SS. On a phone the cut starts at the nearest keyframe.</span>
+  </div>
+
+  <!-- Format -->
+  <div class="field">
+    <span class="label">Quality</span>
+    <select id="format-sel">
+      <option value="best">Best (MP4)</option>
+      <option value="1080">1080p (MP4)</option>
+      <option value="720">720p  (MP4)</option>
+      <option value="480">480p  (MP4)</option>
+      <option value="bestaudio">Audio only (MP3)</option>
+    </select>
+  </div>
+
+  <!-- Save to -->
+  <div class="field">
+    <span class="label">Saved to</span>
+    <div class="saveto">Video → Movies / RSD Downloader<br/>Audio → Music / RSD Downloader</div>
+  </div>
+
+  <hr/>
+
+  <!-- Download -->
+  <button id="download-btn">↓ DOWNLOAD · CHECK · SAVE</button>
+  <button id="cancel-btn">Cancel</button>
+  <div id="done-actions"><button id="open-btn" type="button">Open</button><button id="share-btn" type="button">Share</button></div>
+
+  <!-- Progress -->
+  <div id="progress-wrap">
+    <div class="progress-row">
+      <span id="pct">0%</span>
+      <span id="eta"></span>
+    </div>
+    <div class="track"><div id="bar"></div></div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-row">
+    <div class="dot" id="dot"></div>
+    <span id="status">Ready</span>
+  </div>
+
+  <!-- Log -->
+  <div class="field" style="flex:1;min-height:0;">
+    <div class="log-header">
+      <span class="label">Log</span>
+      <span class="log-clear" id="log-clear">clear</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <div class="components">
+    <span id="comp-status">Checking components…</span>
+    <span id="update-btn">UPDATE YT-DLP</span>
+  </div>
+
+  <div class="footer-credit">developed by rashid_rsd</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
